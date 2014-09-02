@@ -170,7 +170,7 @@
 		// Encloses a value around quotes if needed (makes a value safe for CSV insertion)
 		function safe(str, col)
 		{
-			if (typeof str === "undefined")
+			if (typeof str === "undefined" || str === null)
 				return "";
 
 			str = str.toString().replace(/"/g, '""');
