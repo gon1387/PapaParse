@@ -1,11 +1,11 @@
 BabyParse
 =========
 
-I needed a really fast and reliable CSV parser. [PapaParse.com](http://papaparse.com/#demo) is the best one I've come across yet. But it's wrapped up as a jQuery plugin like it's 2006 or something :P
+I needed a really fast and reliable CSV parser. [PapaParse.com](http://papaparse.com) is the best one I've come across yet but it's designed for web sites and uses several features exclusive to browsers.
 
-So I stripped out the actual parsing bit and made it Node/AMD compatible, so that I could drop it into non-jQuery projects. The code hasn't been touched other than that - I think there's a load of logic for handling streams and whatnot. I honestly don't know and can't be bothered to look. It seems pretty decent. In the project I'm working on now it was an order of magnitude quicker than the thicket of regex hacks it replaced.
+So I extracted the actual parser and made it Node/AMD compatible, so that I could drop it into server-side projects. The code hasn't been touched other than that. It seems pretty decent. In the project I'm working on now it was an order of magnitude quicker than the thicket of regex hacks it replaced.
 
-Don't thank me, thank [@mholt](https://github.com/mholt). (Thanks Matt!)
+Don't thank me, thank [@mholt6](https://twitter.com/mholt6). (Thanks Matt!)
 
 
 
@@ -19,6 +19,8 @@ parsed = Baby.parse( csv );
 // voila
 rows = parsed.data;
 ```
+
+See the [documentation for Papa Parse](http://papaparse.com/docs.html) since it's the same in Baby Parse, but realize that a few features (like downloading, file reading, and worker threads) are unavailble in Baby Parse.
 
 
 License
