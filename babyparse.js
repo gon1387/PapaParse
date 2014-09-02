@@ -37,8 +37,6 @@
 		var config = copyAndValidateConfig(_config);
 		var ph = new ParserHandle(config);
 		var results = ph.parse(_input);
-		//if (isFunction(config.complete))
-		//	config.complete(results);
 		return results;
 	}
 
