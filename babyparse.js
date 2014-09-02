@@ -3,7 +3,7 @@
 	v0.2.1
 	https://github.com/Rich-Harris/BabyParse
 
-	based on Papa Parse v3.0.1
+	based on Papa Parse v3.1.2
 	https://github.com/mholt/PapaParse
 */
 
@@ -29,6 +29,7 @@
 	Baby.UNIT_SEP = String.fromCharCode(31);
 	Baby.BYTE_ORDER_MARK = "\ufeff";
 	Baby.BAD_DELIMITERS = ["\r", "\n", "\"", Baby.BYTE_ORDER_MARK];
+	Baby.DefaultDelimiter = ",";
 
 
 	function CsvToJson(_input, _config)
@@ -36,8 +37,8 @@
 		var config = copyAndValidateConfig(_config);
 		var ph = new ParserHandle(config);
 		var results = ph.parse(_input);
-		if (isFunction(config.complete))
-			config.complete(results);
+		//if (isFunction(config.complete))
+		//	config.complete(results);
 		return results;
 	}
 
@@ -205,6 +206,10 @@
 		// One goal is to minimize the use of regular expressions...
 		var FLOAT = /^\s*-?(\d*\.?\d+|\d+\.?\d*)(e[-+]?\d+)?\s*$/i;
 
+		var self = this;
+		var _input;				// The input being parsed
+		var _parser;			// The core parser being used
+		var _paused = false;	// Whether we are paused or not
 		var _delimiterError;	// Temporary state between delimiter detection and processing results
 		var _fields = [];		// Fields are from the header row of the input, if there is one
 		var _results = {		// The last results returned from the parser
@@ -225,7 +230,7 @@
 				else
 				{
 					_delimiterError = true;	// add error after parsing (otherwise it would be overwritten)
-					_config.delimiter = ",";
+					_config.delimiter = Papa.DefaultDelimiter;
 				}
 				_results.meta.delimiter = _config.delimiter;
 			}
@@ -233,25 +238,57 @@
 			if (isFunction(_config.step))
 			{
 				var userStep = _config.step;
-				_config.step = function(results, parser)
+				_config.step = function(results)
 				{
 					_results = results;
 					if (needsHeaderRow())
 						processResults();
 					else
-						userStep(processResults(), parser);
+						userStep(processResults(), self);
 				};
 			}
 
-			_results = new Parser(_config).parse(input);
-			return processResults();
+			if (_config.preview && _config.header)
+				_config.preview++;	// to compensate for header row
+
+			_input = input;
+			_parser = new Parser(_config);
+			_results = _parser.parse(_input);
+			processResults();
+			if (isFunction(_config.complete) && !_paused)
+				_config.complete(_results);
+			return _paused ? { meta: { paused: true } } : _results;
 		};
+
+		this.pause = function()
+		{
+			_paused = true;
+			_parser.abort();
+			_input = _input.substr(_parser.getCharIndex());
+		};
+
+		this.resume = function()
+		{
+			_paused = false;
+			_parser = new Parser(_config);
+			_parser.parse(_input);
+			if (isFunction(_config.complete) && !_paused)
+				_config.complete(_results);
+		};
+
+		this.abort = function()
+		{
+			_parser.abort();
+			if (isFunction(_config.complete))
+				_config.complete(_results);
+			_input = "";
+		}
 
 		function processResults()
 		{
 			if (_results && _delimiterError)
 			{
-				addError("Delimiter", "UndetectableDelimiter", "Unable to auto-detect delimiting character; defaulted to comma");
+				addError("Delimiter", "UndetectableDelimiter", "Unable to auto-detect delimiting character; defaulted to '"+Papa.DefaultDelimiter+"'");
 				_delimiterError = false;
 			}
 
@@ -305,7 +342,8 @@
 								row["__parsed_extra"] = [];
 							row["__parsed_extra"].push(_results.data[i][j]);
 						}
-						row[_fields[j]] = _results.data[i][j];
+						else
+							row[_fields[j]] = _results.data[i][j];
 					}
 				}
 
@@ -319,7 +357,7 @@
 				}
 			}
 
-			if (_config.header && _results.meta);
+			if (_config.header && _results.meta)
 				_results.meta.fields = _fields;
 
 			return _results;
@@ -327,7 +365,7 @@
 
 		function guessDelimiter(input)
 		{
-			var delimChoices = [",", "\t", "|", ";", Baby.RECORD_SEP, Baby.UNIT_SEP];
+			var delimChoices = [",", "\t", "|", ";", Papa.RECORD_SEP, Papa.UNIT_SEP];
 			var bestDelim, bestDelta, fieldCountPrevRow;
 
 			for (var i = 0; i < delimChoices.length; i++)
@@ -401,7 +439,6 @@
 
 	function Parser(config)
 	{
-		var self = this;
 		var EMPTY = /^\s*$/;
 
 		var _input;		// The input text being parsed
@@ -420,7 +457,6 @@
 		var _colIdx;	// Current col index within result row (0-based)
 		var _runningRowIdx;		// Cumulative row index, used by the preview feature
 		var _aborted = false;	// Abort flag
-		var _paused = false;	// Pause flag
 
 		// Unpack the config object
 		config = config || {};
@@ -432,7 +468,7 @@
 		// Delimiter integrity check
 		if (typeof _delimiter !== 'string'
 			|| _delimiter.length != 1
-			|| Baby.BAD_DELIMITERS.indexOf(_delimiter) > -1)
+			|| Papa.BAD_DELIMITERS.indexOf(_delimiter) > -1)
 			_delimiter = ",";
 
 		// Comment character integrity check
@@ -440,7 +476,7 @@
 			_comments = "#";
 		else if (typeof _comments !== 'string'
 			|| _comments.length != 1
-			|| Baby.BAD_DELIMITERS.indexOf(_comments) > -1
+			|| Papa.BAD_DELIMITERS.indexOf(_comments) > -1
 			|| _comments == _delimiter)
 			_comments = false;
 
@@ -458,13 +494,17 @@
 			_aborted = true;
 		};
 
+		this.getCharIndex = function()
+		{
+			 return _i;
+		};
+
 		function parserLoop()
 		{
 			while (_i < _input.length)
 			{
 				if (_aborted) break;
 				if (_preview > 0 && _runningRowIdx >= _preview) break;
-				if (_paused) return finishParsing();
 
 				if (_ch == '"')
 					parseQuotes();
@@ -583,7 +623,7 @@
 			if (isFunction(_step))
 			{
 				if (_data[_rowIdx])
-					_step(returnable(), self);
+					_step(returnable());
 				clearErrorsAndData();
 			}
 		}
@@ -674,7 +714,8 @@
 				meta: {
 					lines: _lineNum,
 					delimiter: _delimiter,
-					aborted: _aborted
+					aborted: _aborted,
+					truncated: _preview > 0 && _i < _input.length
 				}
 			};
 		}
