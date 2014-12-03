@@ -909,7 +909,7 @@
 				return;
 			for (var i = 0; needsHeaderRow() && i < _results.data.length; i++)
 				for (var j = 0; j < _results.data[i].length; j++)
-					_fields.push(_results.data[i][j]);
+					_fields.push(trimString(_results.data[i][j]));
 			_results.data.splice(0, 1);
 		}
 
@@ -926,7 +926,7 @@
 				{
 					if (_config.dynamicTyping)
 					{
-						var value = _results.data[i][j];
+						var value = trimString(_results.data[i][j]);
 						if (value == "true")
 							_results.data[i][j] = true;
 						else if (value == "false")
@@ -1480,5 +1480,10 @@
 	function isFunction(func)
 	{
 		return typeof func === 'function';
+	}
+
+	function trimString(strVal){
+		var rtrim = /^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g;
+		return strVal.replace(rtrim, '');
 	}
 })(this);
